@@ -1,0 +1,34 @@
+name: Daily Dashboard Update
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # 4:00 AM UTC = 9:30 AM IST, every day
+  workflow_dispatch:        # manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Refresh SEED_VIDEOS + SEED_SHORTS
+        run: python3 .github/scripts/cloud_update.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "GYANLIVE Health Bot"
+          git config user.email "noreply@github.com"
+          git add index.html
+          if git diff --staged --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Auto update: live + shorts — $(date '+%d %b %Y')"
+            git push
+            echo "✅ Pushed — Netlify deploying."
+          fi
