@@ -55,6 +55,14 @@
   .views-hi{color:var(--yellow);font-weight:600;}
   .shorts-section{padding:20px 28px;}
   .shorts-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  /* Section switcher */
+  .section-switcher{display:flex;align-items:center;gap:10px;padding:12px 28px;background:var(--card2);border-bottom:1px solid var(--border);}
+  .section-switcher label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);margin-right:4px;}
+  .sect-btn{padding:7px 20px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:var(--card);color:var(--text-dim);transition:all .2s;}
+  .sect-btn:hover{border-color:var(--text-dim);}
+  .sect-btn.active[data-sect="all"]    {background:var(--teal);color:#000;border-color:var(--teal);}
+  .sect-btn.active[data-sect="Nursing"]{background:#42a5f5;color:#000;border-color:#42a5f5;}
+  .sect-btn.active[data-sect="Health"] {background:#66bb6a;color:#000;border-color:#66bb6a;}
   @media(max-width:900px){.summary-row{grid-template-columns:repeat(3,1fr);}.charts-row{grid-template-columns:1fr;}.shorts-grid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
@@ -76,6 +84,14 @@
 <div class="status-bar">
   <div class="status-dot"></div>
   <span id="statusText">Loading...</span>
+</div>
+
+<!-- Section Switcher -->
+<div class="section-switcher">
+  <label>Section :</label>
+  <button class="sect-btn active" data-sect="all"     onclick="switchSection('all',this)">All</button>
+  <button class="sect-btn"        data-sect="Nursing" onclick="switchSection('Nursing',this)">🏥 Nursing</button>
+  <button class="sect-btn"        data-sect="Health"  onclick="switchSection('Health',this)">💊 Health</button>
 </div>
 
 <!-- Summary Cards -->
@@ -165,6 +181,7 @@ let allVideos = [...SEED_VIDEOS];
 let charts    = {};
 let shortsChart1 = null, shortsChart2 = null;
 let activeSubject = 'all';
+let activeSection = 'all';  // 'all' | 'Nursing' | 'Health'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n) {
@@ -188,31 +205,55 @@ function detectSubject(title) {
   return 'Other';
 }
 
+// Top-level section: Nursing (SMC / Staff Nurse / Nursing) vs Health (everything else)
+function detectSection(title) {
+  if (/\bnursing\b|\bSMC\b|\bstaff\s*nurse\b/i.test(title)) return 'Nursing';
+  return 'Health';
+}
+
 // ── Date filter ───────────────────────────────────────────────────────────────
 function getFilteredVideos() {
   const from = document.getElementById('dateFrom').value;
   const to   = document.getElementById('dateTo').value;
-  if (!from || !to) return allVideos;
-  const [f,t] = from <= to ? [from,to] : [to,from];
-  return allVideos.filter(v => {
-    const d = toLocalDate(v.liveDate || v.publishedAt);
-    return d >= f && d <= t;
-  });
+  let vids = allVideos;
+  // Apply date filter
+  if (from && to) {
+    const [f,t] = from <= to ? [from,to] : [to,from];
+    vids = vids.filter(v => { const d = toLocalDate(v.liveDate||v.publishedAt); return d >= f && d <= t; });
+  }
+  // Apply section filter
+  if (activeSection !== 'all') vids = vids.filter(v => detectSection(v.title) === activeSection);
+  return vids;
 }
 function getFilteredShorts() {
   const from = document.getElementById('dateFrom').value;
   const to   = document.getElementById('dateTo').value;
-  if (!from || !to) return SEED_SHORTS;
-  const [f,t] = from <= to ? [from,to] : [to,from];
-  return SEED_SHORTS.filter(s => s.publishedAt >= f && s.publishedAt <= t);
+  let shorts = SEED_SHORTS;
+  // Apply date filter
+  if (from && to) {
+    const [f,t] = from <= to ? [from,to] : [to,from];
+    shorts = shorts.filter(s => s.publishedAt >= f && s.publishedAt <= t);
+  }
+  // Apply section filter
+  if (activeSection !== 'all') shorts = shorts.filter(s => detectSection(s.title) === activeSection);
+  return shorts;
 }
 
 function applyFilter() { renderAll(getFilteredVideos(), getFilteredShorts()); }
 function resetFilter() {
-  const dates = allVideos.map(v => toLocalDate(v.liveDate || v.publishedAt)).filter(Boolean).sort();
+  const base = activeSection === 'all' ? allVideos : allVideos.filter(v => detectSection(v.title) === activeSection);
+  const dates = base.map(v => toLocalDate(v.liveDate||v.publishedAt)).filter(Boolean).sort();
   document.getElementById('dateFrom').value = dates[0] || '';
   document.getElementById('dateTo').value   = dates[dates.length-1] || '';
-  renderAll(allVideos, SEED_SHORTS);
+  renderAll(getFilteredVideos(), getFilteredShorts());
+}
+
+function switchSection(sect, btn) {
+  activeSection = sect;
+  activeSubject = 'all';  // reset subject filter when switching sections
+  document.querySelectorAll('.sect-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  resetFilter();  // recalculate date range for this section and re-render
 }
 
 // ── Summary cards ─────────────────────────────────────────────────────────────
@@ -556,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dateFrom').min = document.getElementById('dateTo').min = dates[0];
     document.getElementById('dateFrom').max = document.getElementById('dateTo').max = dates[dates.length-1];
   }
-  renderAll(allVideos, SEED_SHORTS);
+  renderAll(getFilteredVideos(), getFilteredShorts());
   fetchFreshData();
 });
 </script>
